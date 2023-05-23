@@ -69,9 +69,19 @@ def get_select_servers():
 for server in servers:
     zk.DataWatch("/clients/" + server + "/done", partial(notify_done, server))
 
+def validate_instruction(instruction):
+    valid_starts = ["create table", "select", "drop table", "insert into", "delete from"]
+    if not any(instruction.lower().startswith(vs) for vs in valid_starts):
+        print("Error: Instruction must start with one of the following: 'create table', 'drop table', 'select', 'insert into', 'delete from'")
+        return False
+    return True
+
 while True:
     # Get user input
     instruction = input("Please enter your instruction: ")
+
+    if not validate_instruction(instruction):
+        continue
 
     # Pick two random servers
     selected_servers = random.sample(servers, 2)
@@ -86,6 +96,9 @@ while True:
         # Delete the old instruction if it exists
         if zk.exists("/servers/" + server + "/instructions"):
             zk.delete("/servers/" + server + "/instructions")
+
+        if not zk.exists("/servers/" + server + "/tables"):
+            zk.create("/servers/" + server + "/tables")
 
         # Set the instruction and watch for a done signal
         zk.create("/servers/" + server + "/instructions/", instruction.encode("utf-8"), ephemeral=True)
