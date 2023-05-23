@@ -63,6 +63,7 @@ def get_select_servers():
     # 数量大于1时，随机返回其中一个server
     if len(select_servers) > 1:
         select_servers = random.sample(select_servers, 1)
+        return select_servers
     else:
         print("no such table")
         return None
@@ -101,8 +102,8 @@ while True:
     # Pick two random servers
     if selected_servers is None:
         continue
-    
-    selected_servers = random.sample(servers, 2)
+
+    # selected_servers = random.sample(servers, 2)
 
     for server in selected_servers:
         print("Sending instruction to %s" % server)
@@ -125,7 +126,7 @@ while True:
         # zk.DataWatch("/clients/" + server + "/done", notify_done)
 
     # Wait for both masters to process the instruction
-    while len(completed_servers) < 2:
+    while len(completed_servers) < len(selected_servers):
         time.sleep(1)
 
     # Reset the completed servers list for the next round
