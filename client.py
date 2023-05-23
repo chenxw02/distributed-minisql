@@ -37,6 +37,7 @@ def get_create_table_servers():
     table_name = instruction.split(" ")[2]
     for server in servers:
         if zk.exists("/servers/" + server + "/tables/" + table_name):
+            print("table already exists")
             return None
     min_table_num = 100
     min_table_server = []
@@ -47,8 +48,9 @@ def get_create_table_servers():
             if table_num < min_table_num:
                 min_table_num = table_num
                 min_table_server.append(server)
-    print(min_table_server)
-    return min_table_server
+    print(min_table_server[-2:])
+    # Only return the last two servers in the list
+    return min_table_server[-2:]
 
 def get_select_servers():
     # 从instruction中提取表名
@@ -91,13 +93,15 @@ while True:
     for instruction_start in instruction_handlers:
         if instruction.lower().startswith(instruction_start):
             selected_servers = instruction_handlers[instruction_start]()  # Call the corresponding function
-            print(f"Selected servers: {selected_servers}")
             break
     else:
         print("Invalid instruction.")
         continue    
 
     # Pick two random servers
+    if selected_servers is None:
+        continue
+    
     selected_servers = random.sample(servers, 2)
 
     for server in selected_servers:
