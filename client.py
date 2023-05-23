@@ -33,6 +33,11 @@ def get_update_servers():
 def get_create_table_servers():
     # 从instruction中提取表名
     # 查找表最少的两个服务器
+    # 先看这个表是否已经存在
+    table_name = instruction.split(" ")[2]
+    for server in servers:
+        if zk.exists("/servers/" + server + "/tables/" + table_name):
+            return None
     min_table_num = 100
     min_table_server = []
     for server in servers:
