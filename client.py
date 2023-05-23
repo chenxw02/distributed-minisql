@@ -12,11 +12,54 @@ completed_servers = []
 
 def notify_done(server, data, stat, event):
     if event is not None and (event.type == "CREATED" or event.type == "CHANGED"):
-        print("Master has finished processing: %s" % data.decode("utf-8"))
+        # 打印是哪个server完成了任务
+        print(f"{server} has finished processing: {data.decode('utf-8')}")
         completed_servers.append(server)
-        print(server)
         if zk.exists("/clients/" + server + "/done"):
             zk.delete("/clients/" + server + "/done")
+
+# drop/insert/delete/update
+def get_update_servers():
+    # 从instruction中提取表名
+    table_name = instruction.split(" ")[2]
+    print(table_name)
+    # 获取所有包含该表的服务器
+    drop_table_servers = []
+    for server in servers:
+        if zk.exists("/servers/" + server + "/tables/" + table_name):
+            drop_table_servers.append(server)
+    return drop_table_servers
+
+def get_create_table_servers():
+    # 从instruction中提取表名
+    # 查找表最少的两个服务器
+    min_table_num = 100
+    min_table_server = []
+    for server in servers:
+        if zk.exists("/servers/" + server + "/tables"):
+            table_num = len(zk.get_children("/servers/" + server + "/tables"))
+            print(table_num)
+            if table_num < min_table_num:
+                min_table_num = table_num
+                min_table_server.append(server)
+    print(min_table_server)
+    return min_table_server
+
+def get_select_servers():
+    # 从instruction中提取表名
+    table_name = instruction.split(" ")[3]
+    # 获取所有包含该表的服务器
+    select_servers = []
+    for server in servers:
+        if zk.exists("/servers/" + server + "/tables/" + table_name):
+            select_servers.append(server)
+    # 数量大于1时，随机返回其中一个server
+    if len(select_servers) > 1:
+        select_servers = random.sample(select_servers, 1)
+    else:
+        print("no such table")
+        return None
+
 
 for server in servers:
     zk.DataWatch("/clients/" + server + "/done", partial(notify_done, server))
