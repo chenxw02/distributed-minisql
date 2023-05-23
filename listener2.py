@@ -16,13 +16,30 @@ def handle_instruction(data, stat, event):
         zk.create("/clients/")
     if not zk.exists("/clients/" + master_name ):
         zk.create("/clients/" + master_name)
-    zk.create("/clients/" + master_name + "/done", b"Done", ephemeral=True)
-    zk.delete(event.path)
+
+    done_path = "/clients/" + master_name + "/done"
+    if zk.exists(done_path):
+        print("Updating done node")
+        # Update the done node instead of deleting and creating it
+        zk.set(done_path, b"Done_update")
+    else:
+        print("Creating done node")
+        zk.create(done_path, b"Done", ephemeral=True)
+
+    # Make sure the instruction node exists before deleting it
+    print("Deleting instruction node")
+    if zk.exists(event.path):
+        zk.delete(event.path)
+    print("Done")
+
 
 @zk.DataWatch("/servers/" + master_name + "/instructions")
 def watch_node(data, stat, event):
     if event is not None and event.type == "CREATED":
-        handle_instruction(data, stat, event)
+        try:
+            handle_instruction(data, stat, event)
+        except Exception as e:
+            print(f"An error occurred: {e}")
 
 while True:
     # Keep your program running or the listener will stop
