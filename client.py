@@ -76,12 +76,26 @@ def validate_instruction(instruction):
         return False
     return True
 
+instruction_handlers = {
+    "select": get_select_servers,
+    "create table": get_create_table_servers,
+    "drop table": get_update_servers,
+    "insert into": get_update_servers,
+    "delete from": get_update_servers,
+}
+
 while True:
     # Get user input
     instruction = input("Please enter your instruction: ")
 
-    if not validate_instruction(instruction):
-        continue
+    for instruction_start in instruction_handlers:
+        if instruction.lower().startswith(instruction_start):
+            selected_servers = instruction_handlers[instruction_start]()  # Call the corresponding function
+            print(f"Selected servers: {selected_servers}")
+            break
+    else:
+        print("Invalid instruction.")
+        continue    
 
     # Pick two random servers
     selected_servers = random.sample(servers, 2)
