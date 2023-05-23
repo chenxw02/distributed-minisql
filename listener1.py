@@ -98,7 +98,7 @@ def watch_node(data, stat, event):
 def watch_party(data, stat, event):
     if event is not None and event.type == "CREATED":
         try:
-
+            print("party changes")
         except Exception as e:
             print(f"An error occurred: {e}")
 
