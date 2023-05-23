@@ -22,13 +22,16 @@ def notify_done(server, data, stat, event):
 def get_update_servers():
     # 从instruction中提取表名
     table_name = instruction.split(" ")[2]
-    print(table_name)
     # 获取所有包含该表的服务器
-    drop_table_servers = []
+    update_servers = []
     for server in servers:
         if zk.exists("/servers/" + server + "/tables/" + table_name):
-            drop_table_servers.append(server)
-    return drop_table_servers
+            update_servers.append(server)
+    if update_servers == []:
+        print("no such table")
+        return None
+    else:
+        return update_servers
 
 def get_create_table_servers():
     # 从instruction中提取表名
