@@ -19,16 +19,17 @@ s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 s.bind((host, port))
 s.listen(3)
 
+
 class Region_instance():
     region_socket = None
     region_socket_port = None
 
     @staticmethod
     def send_Instruction(instruction):
-        if Region_instance.region_socket!=None:
+        if Region_instance.region_socket != None:
             Region_instance.region_socket.sendall(instruction.encode())
 
-    #向minisql（region）发送指令
+    # 向minisql（region）发送指令
     @staticmethod
     def send_Instruction(instruction):
         if Region_instance.region_socket != None:
@@ -50,7 +51,6 @@ class Region_instance():
             return response_tuples
 
 
-
 def handle_instruction(data, stat, event):
     message = 'done!'
     # Handle the instruction here...
@@ -58,32 +58,31 @@ def handle_instruction(data, stat, event):
 
     # 包含create table
     if data.decode("utf-8").find("create table") != -1:
-        #提取表名
+        # 提取表名
         table_name = data.decode("utf-8").split(" ")[2]
         print(table_name)
-        #创建表
+        # 创建表
         if not zk.exists("/servers/" + master_name + "/tables"):
             zk.create("/servers/" + master_name + "/tables")
         if not zk.exists("/servers/" + master_name + "/tables/" + table_name):
             zk.create("/servers/" + master_name + "/tables/" + table_name)
             Region_instance.send_Instruction(data.decode("utf-8"))
             message = "table created"
-        else :
+        else:
             message = "table already exists"
-    
+
     # 包含drop table
     if data.decode("utf-8").find("drop table") != -1:
-        #提取表名
+        # 提取表名
         table_name = data.decode("utf-8").split(" ")[2]
         print(table_name)
-        #删除表
+        # 删除表
         if zk.exists("/servers/" + master_name + "/tables/" + table_name):
             zk.delete("/servers/" + master_name + "/tables/" + table_name)
             Region_instance.send_Instruction(data.decode("utf-8"))
             message = "table dropped"
-        else :
+        else:
             message = "table does not exist"
-
 
     if data.decode("utf-8").find("copy table") != -1:
         # 提取表名
@@ -94,8 +93,6 @@ def handle_instruction(data, stat, event):
         print(target_region_name)
         copy_table(target_region_name, source_region_name, table_name)
         message = "copy table done"
-
-
 
     # When done, notify the client
     if not zk.exists("/clients/"):
@@ -152,7 +149,8 @@ def copy_master_name(offline_region_name):
 
     return servers
 
-#构建“copy table”的指令通过zookeeper传给source_server
+
+# 构建“copy table”的指令通过zookeeper传给source_server
 def copy_instruction(source_server_name, target_server_name, table):
     instruction_path = "/servers/" + source_server_name + "/instructions"
     instruction_data = "copy table " + table + " from " + source_server_name + " to " + target_server_name
@@ -163,12 +161,9 @@ def copy_instruction(source_server_name, target_server_name, table):
     zk.create(instruction_path, instruction_data.encode("utf-8"), ephemeral=True)
 
 
-
-
-#这个函数当source_region_name为当前mastername的时候调用，把当前region的某一table通过zookeeper拷贝到target_region_name服务器中
+# 这个函数当source_region_name为当前mastername的时候调用，把当前region的某一table通过zookeeper拷贝到target_region_name服务器中
 def copy_table(target_region_name, source_region_name, table_name):
-
-    #该函数被调用的时候只有当source_region_name为当前mastername的时候
+    # 该函数被调用的时候只有当source_region_name为当前mastername的时候
     if source_region_name != master_name:
         print("copy table error")
         return
@@ -183,9 +178,9 @@ def copy_table(target_region_name, source_region_name, table_name):
     table_properties = response[0]  # 表属性值
     table_values = response[1:]  # 表值
     table_properties_str = ','.join(table_properties)  # 表属性值字符串
-    target_table_path = f"/servers/{target_region_name}/tables/{table_name}"
-    if not zk.exists(target_table_path):
-        zk.create(target_table_path, value=table_properties_str.encode("utf-8"))
+    #target_table_path = f"/servers/{target_region_name}/tables/{table_name}"
+    #if not zk.exists(target_table_path):
+    #    zk.create(target_table_path, value=table_properties_str.encode("utf-8"))
 
     # 更新/table/xxx/server节点内容
     server1_path = f"/tables/{table_name}/server1"
@@ -222,12 +217,10 @@ def copy_table(target_region_name, source_region_name, table_name):
 
         # 创建instruction节点并写入指令
         if not zk.exists(instruction_path):
-            zk.create(instruction_path)
+            zk.create(instruction_path, insert_instruction.encode("utf-8"))
         else:
             zk.delete(instruction_path)
-            zk.create(instruction_path)
-
-        zk.set(instruction_path, insert_instruction.encode("utf-8"))
+            zk.create(instruction_path, insert_instruction.encode("utf-8"))
 
         # 等待指令执行完成
         while True:
@@ -235,6 +228,7 @@ def copy_table(target_region_name, source_region_name, table_name):
                 done_data, _ = zk.get(done_path)
                 if done_data.decode() == "value inserted" or not zk.exists(instruction_path):
                     break
+
 
 def fault_tolerance(offline_region_name):
     # 获取当前已有的服务器名列表
@@ -282,24 +276,25 @@ def watch_node(data, stat, event):
 
 
 party_flag = 0
-@zk.DataWatch("/party")
-def watch_party_nodes(data, stat, event):
+
+
+@zk.ChildrenWatch("/party")
+def watch_party_nodes(children):
+    print("party changed")
+    print(children)
+    find_region = 0
     children = zk.get_children("/party")
     for child in children:
         node_path = "/party" + '/' + child
         node_data, _ = zk.get(node_path)
         if node_data.decode() == master_name:
-            party_flag = 1
+            find_region = 1
             print(f"Node {child} contains master_name: {master_name}")
-        else:
-            if party_flag == 1:
-                print(f"Node {child} loss master_name: {master_name}")
-                party_flag = 0
-                fault_tolerance(master_name)
-                print("容错容灾end")
 
-
-
+    if find_region == 0 and Region_instance.region_socket_port is not None:
+        print(f"Node loss master_name: {master_name}")
+        fault_tolerance(master_name)
+        print("容错容灾end")
 
 
 ##接收region的连接，构建region_instance与region通信
@@ -310,9 +305,10 @@ def add_Region(conn, addr):
     region_name = conn.recv(1024).decode()
     print("region:" + region_name + " is connected")
 
+
 while True:
     while True:
         conn, addr = s.accept()
         add_Region(conn, addr)
     # Keep your program running or the listener will stop
-    #time.sleep(1)
+    # time.sleep(1)

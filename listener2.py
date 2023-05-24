@@ -178,9 +178,9 @@ def copy_table(target_region_name, source_region_name, table_name):
     table_properties = response[0]  # 表属性值
     table_values = response[1:]  # 表值
     table_properties_str = ','.join(table_properties)  # 表属性值字符串
-    target_table_path = f"/servers/{target_region_name}/tables/{table_name}"
-    if not zk.exists(target_table_path):
-        zk.create(target_table_path, value=table_properties_str.encode("utf-8"))
+    #target_table_path = f"/servers/{target_region_name}/tables/{table_name}"
+    #if not zk.exists(target_table_path):
+    #    zk.create(target_table_path, value=table_properties_str.encode("utf-8"))
 
     # 更新/table/xxx/server节点内容
     server1_path = f"/tables/{table_name}/server1"
@@ -217,12 +217,10 @@ def copy_table(target_region_name, source_region_name, table_name):
 
         # 创建instruction节点并写入指令
         if not zk.exists(instruction_path):
-            zk.create(instruction_path)
+            zk.create(instruction_path, insert_instruction.encode("utf-8"))
         else:
             zk.delete(instruction_path)
-            zk.create(instruction_path)
-
-        zk.set(instruction_path, insert_instruction.encode("utf-8"))
+            zk.create(instruction_path, insert_instruction.encode("utf-8"))
 
         # 等待指令执行完成
         while True:
@@ -280,21 +278,23 @@ def watch_node(data, stat, event):
 party_flag = 0
 
 
-@zk.DataWatch("/party")
-def watch_party_nodes(data, stat, event):
+@zk.ChildrenWatch("/party")
+def watch_party_nodes(children):
+    print("party changed")
+    print(children)
+    find_region = 0
     children = zk.get_children("/party")
     for child in children:
         node_path = "/party" + '/' + child
         node_data, _ = zk.get(node_path)
         if node_data.decode() == master_name:
-            party_flag = 1
+            find_region = 1
             print(f"Node {child} contains master_name: {master_name}")
-        else:
-            if party_flag == 1:
-                print(f"Node {child} loss master_name: {master_name}")
-                party_flag = 0
-                fault_tolerance(master_name)
-                print("容错容灾end")
+
+    if find_region == 0 and Region_instance.region_socket_port is not None:
+        print(f"Node loss master_name: {master_name}")
+        fault_tolerance(master_name)
+        print("容错容灾end")
 
 
 ##接收region的连接，构建region_instance与region通信
