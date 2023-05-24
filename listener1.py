@@ -1,5 +1,6 @@
 import threading
 import socket
+import random
 
 from kazoo.client import KazooClient
 import time
@@ -65,6 +66,7 @@ def handle_instruction(data, stat, event):
             zk.create("/servers/" + master_name + "/tables")
         if not zk.exists("/servers/" + master_name + "/tables/" + table_name):
             zk.create("/servers/" + master_name + "/tables/" + table_name)
+            Region_instance.send_Instruction(data.decode("utf-8"))
             message = "table created"
         else :
             message = "table already exists"
@@ -77,11 +79,10 @@ def handle_instruction(data, stat, event):
         #删除表
         if zk.exists("/servers/" + master_name + "/tables/" + table_name):
             zk.delete("/servers/" + master_name + "/tables/" + table_name)
+            Region_instance.send_Instruction(data.decode("utf-8"))
             message = "table dropped"
         else :
             message = "table does not exist"
-
-
 
 
     if data.decode("utf-8").find("copy table") != -1:
@@ -91,7 +92,8 @@ def handle_instruction(data, stat, event):
         target_region_name = data.decode("utf-8").split(" ")[6]
         print(table_name)
         print(target_region_name)
-        #TODO:进行table copy
+        copy_table(target_region_name, source_region_name, table_name)
+        message = "copy table done"
 
 
 
@@ -234,39 +236,40 @@ def copy_table(target_region_name, source_region_name, table_name):
                 if done_data.decode() == "value inserted" or not zk.exists(instruction_path):
                     break
 
+def fault_tolerance(offline_region_name):
+    # 获取当前已有的服务器名列表
+    server_names = zk.get_children('/servers')
 
+    # 随机打乱服务器名列表
+    random.shuffle(server_names)
 
+    # 调用 copy_master_name 函数获取需要进行容错容灾的表和copy table的源服务器的列表
+    table_server_pairs = copy_master_name(offline_region_name)
 
-def insert_table_values(table_name, target_region_name, table_values):
-    zk = KazooClient(hosts='127.0.0.1:2181,127.0.0.1:2182,127.0.0.1:2183')
-    zk.start()
+    for table_name, source_server_name in table_server_pairs:
+        # 选择一个不是目标服务器且不是全局变量 master_name 的源服务器
+        target_server_name = None
+        for server_name in server_names:
+            if server_name != source_server_name and server_name != offline_region_name:
+                target_server_name = server_name
+                break
 
-    instruction_path = f"/servers/{target_region_name}/instructions"
-    done_path = f"/clients/{target_region_name}/done"
+        if source_server_name is None:
+            print(f"No available source server for table '{table_name}' and target server '{target_server_name}'.")
+            continue
 
-    for row in table_values:
-        values_str = ','.join(row)
-        insert_instruction = f"insert into {table_name} values ({values_str})"
+        # 调用 copy_instruction 函数进行容错容灾
+        copy_instruction(source_server_name, target_server_name, table_name)
 
-        # 创建instruction节点并写入指令
-        if not zk.exists(instruction_path):
-            zk.create(instruction_path)
-        else:
-            zk.delete(instruction_path)
-            zk.create(instruction_path)
-
-        zk.set(instruction_path, insert_instruction.encode("utf-8"))
-
-        # 等待指令执行完成
+        # 等待容错容灾操作完成
+        done_path = f"/clients/{source_server_name}/done"
         while True:
             if zk.exists(done_path):
                 done_data, _ = zk.get(done_path)
-                if done_data.decode() == "table created" or not zk.exists(instruction_path):
+                if done_data == b"copy table done":
                     break
 
-    zk.stop()
-    zk.close()
-
+    print("Fault tolerance and disaster recovery completed.")
 
 
 @zk.DataWatch("/servers/" + master_name + "/instructions")
@@ -274,19 +277,28 @@ def watch_node(data, stat, event):
     if event is not None and event.type == "CREATED":
         try:
             handle_instruction(data, stat, event)
-            Region_instance.send_Instruction(data.decode("utf-8"))
         except Exception as e:
             print(f"An error occurred: {e}")
 
 
-@zk.DataWatch("/party/" + master_name)
-def watch_party(data, stat, event):
-    if event is not None and event.type == "CREATED":
-        try:
-            ##TODO：容错容灾处理
-            print("party changes")
-        except Exception as e:
-            print(f"An error occurred: {e}")
+party_flag = 0
+@zk.DataWatch("/party")
+def watch_party_nodes(data, stat, event):
+    children = zk.get_children("/party")
+    for child in children:
+        node_path = "/party" + '/' + child
+        node_data, _ = zk.get(node_path)
+        if node_data.decode() == master_name:
+            party_flag = 1
+            print(f"Node {child} contains master_name: {master_name}")
+        else:
+            if party_flag == 1:
+                print(f"Node {child} loss master_name: {master_name}")
+                party_flag = 0
+                fault_tolerance(master_name)
+                print("容错容灾end")
+
+
 
 
 
