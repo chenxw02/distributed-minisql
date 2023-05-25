@@ -24,10 +24,6 @@ class Region_instance():
     region_socket = None
     region_socket_port = None
 
-    @staticmethod
-    def send_Instruction(instruction):
-        if Region_instance.region_socket != None:
-            Region_instance.region_socket.sendall(instruction.encode())
 
     # 向minisql（region）发送指令
     @staticmethod
@@ -83,6 +79,17 @@ def handle_instruction(data, stat, event):
             message = "table dropped"
         else:
             message = "table does not exist"
+
+    # 包含insert value
+    if data.decode("utf-8").find("insert into") != -1:
+        # 提取表名
+        table_name = data.decode("utf-8").split(" ")[2]
+        print(table_name)
+        #执行
+        Region_instance.send_Instruction(data.decode("utf-8"))
+        message = "insert value end"
+
+
 
     if data.decode("utf-8").find("copy table") != -1:
         # 提取表名
@@ -307,8 +314,7 @@ def add_Region(conn, addr):
 
 
 while True:
-    while True:
-        conn, addr = s.accept()
-        add_Region(conn, addr)
+    conn, addr = s.accept()
+    add_Region(conn, addr)
     # Keep your program running or the listener will stop
     # time.sleep(1)
