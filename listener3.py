@@ -6,14 +6,14 @@ from kazoo.client import KazooClient
 import time
 
 # Assume the name is given when you run this script
-master_name = "minisql3"  # or minisql2, minisql3
+master_name = "minisql1"  # or minisql2, minisql3
 
 zk = KazooClient(hosts='127.0.0.1:2181,127.0.0.1:2182,127.0.0.1:2183')
 zk.start()
 
 # socket
 host = '127.0.0.1'
-port = 8890
+port = 8888
 portNum = 0
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 s.bind((host, port))
@@ -24,10 +24,6 @@ class Region_instance():
     region_socket = None
     region_socket_port = None
 
-    @staticmethod
-    def send_Instruction(instruction):
-        if Region_instance.region_socket != None:
-            Region_instance.region_socket.sendall(instruction.encode())
 
     # 向minisql（region）发送指令
     @staticmethod
@@ -84,6 +80,17 @@ def handle_instruction(data, stat, event):
         else:
             message = "table does not exist"
 
+    # 包含insert value
+    if data.decode("utf-8").find("insert into") != -1:
+        # 提取表名
+        table_name = data.decode("utf-8").split(" ")[2]
+        print(table_name)
+        #执行
+        Region_instance.send_Instruction(data.decode("utf-8"))
+        message = "insert value end"
+
+
+
     if data.decode("utf-8").find("copy table") != -1:
         # 提取表名
         table_name = data.decode("utf-8").split(" ")[2]
@@ -92,7 +99,10 @@ def handle_instruction(data, stat, event):
         print(table_name)
         print(target_region_name)
         copy_table(target_region_name, source_region_name, table_name)
+
         message = "copy table done"
+        notify_client_fault_tolerance(message)
+        return
 
     # When done, notify the client
     if not zk.exists("/clients/"):
@@ -116,6 +126,29 @@ def handle_instruction(data, stat, event):
     if zk.exists(event.path):
         zk.delete(event.path)
     print("Done")
+
+
+
+
+
+
+
+#用于通知client关于容错容灾的情况，包括掉线，拷贝等
+def notify_client_fault_tolerance(message):
+    zk.ensure_path("/clients/" + master_name)
+
+    done_path = "/clients/" + master_name + "/fault_tolerance"
+    if zk.exists(done_path):
+        # Update the done node instead of deleting and creating it
+        print("Updating done node")
+        # 发送message
+        zk.set(done_path, message.encode("utf-8"))
+    else:
+        print("Creating done node")
+        # 发送message
+        zk.create(done_path, message.encode("utf-8"), ephemeral=True)
+    return
+
 
 
 # 找到掉线region对应的所有table的另一个copy所在的服务器名字，返回值以（tablename，servername）构成
@@ -160,6 +193,8 @@ def copy_instruction(source_server_name, target_server_name, table):
         zk.delete(instruction_path)
     zk.create(instruction_path, instruction_data.encode("utf-8"), ephemeral=True)
 
+    notify_client_fault_tolerance("node:" + master_name + "has send the instruction for copying table")
+
 
 # 这个函数当source_region_name为当前mastername的时候调用，把当前region的某一table通过zookeeper拷贝到target_region_name服务器中
 def copy_table(target_region_name, source_region_name, table_name):
@@ -178,9 +213,7 @@ def copy_table(target_region_name, source_region_name, table_name):
     table_properties = response[0]  # 表属性值
     table_values = response[1:]  # 表值
     table_properties_str = ','.join(table_properties)  # 表属性值字符串
-    #target_table_path = f"/servers/{target_region_name}/tables/{table_name}"
-    #if not zk.exists(target_table_path):
-    #    zk.create(target_table_path, value=table_properties_str.encode("utf-8"))
+
 
     # 更新/table/xxx/server节点内容
     server1_path = f"/tables/{table_name}/server1"
@@ -228,6 +261,8 @@ def copy_table(target_region_name, source_region_name, table_name):
                 done_data, _ = zk.get(done_path)
                 if done_data.decode() == "value inserted" or not zk.exists(instruction_path):
                     break
+
+    notify_client_fault_tolerance(master_name + "copy table done")
 
 
 def fault_tolerance(offline_region_name):
@@ -293,6 +328,7 @@ def watch_party_nodes(children):
 
     if find_region == 0 and Region_instance.region_socket_port is not None:
         print(f"Node loss master_name: {master_name}")
+        notify_client_fault_tolerance("fault happened for node:" + master_name)
         fault_tolerance(master_name)
         print("容错容灾end")
 
@@ -307,8 +343,7 @@ def add_Region(conn, addr):
 
 
 while True:
-    while True:
-        conn, addr = s.accept()
-        add_Region(conn, addr)
+    conn, addr = s.accept()
+    add_Region(conn, addr)
     # Keep your program running or the listener will stop
     # time.sleep(1)

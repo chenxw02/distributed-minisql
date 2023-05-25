@@ -99,7 +99,10 @@ def handle_instruction(data, stat, event):
         print(table_name)
         print(target_region_name)
         copy_table(target_region_name, source_region_name, table_name)
+
         message = "copy table done"
+        notify_client_fault_tolerance(message)
+        return
 
     # When done, notify the client
     if not zk.exists("/clients/"):
@@ -123,6 +126,29 @@ def handle_instruction(data, stat, event):
     if zk.exists(event.path):
         zk.delete(event.path)
     print("Done")
+
+
+
+
+
+
+
+#用于通知client关于容错容灾的情况，包括掉线，拷贝等
+def notify_client_fault_tolerance(message):
+    zk.ensure_path("/clients/" + master_name)
+
+    done_path = "/clients/" + master_name + "/fault_tolerance"
+    if zk.exists(done_path):
+        # Update the done node instead of deleting and creating it
+        print("Updating done node")
+        # 发送message
+        zk.set(done_path, message.encode("utf-8"))
+    else:
+        print("Creating done node")
+        # 发送message
+        zk.create(done_path, message.encode("utf-8"), ephemeral=True)
+    return
+
 
 
 # 找到掉线region对应的所有table的另一个copy所在的服务器名字，返回值以（tablename，servername）构成
@@ -167,6 +193,8 @@ def copy_instruction(source_server_name, target_server_name, table):
         zk.delete(instruction_path)
     zk.create(instruction_path, instruction_data.encode("utf-8"), ephemeral=True)
 
+    notify_client_fault_tolerance("node:" + master_name + "has send the instruction for copying table")
+
 
 # 这个函数当source_region_name为当前mastername的时候调用，把当前region的某一table通过zookeeper拷贝到target_region_name服务器中
 def copy_table(target_region_name, source_region_name, table_name):
@@ -185,9 +213,7 @@ def copy_table(target_region_name, source_region_name, table_name):
     table_properties = response[0]  # 表属性值
     table_values = response[1:]  # 表值
     table_properties_str = ','.join(table_properties)  # 表属性值字符串
-    #target_table_path = f"/servers/{target_region_name}/tables/{table_name}"
-    #if not zk.exists(target_table_path):
-    #    zk.create(target_table_path, value=table_properties_str.encode("utf-8"))
+
 
     # 更新/table/xxx/server节点内容
     server1_path = f"/tables/{table_name}/server1"
@@ -235,6 +261,8 @@ def copy_table(target_region_name, source_region_name, table_name):
                 done_data, _ = zk.get(done_path)
                 if done_data.decode() == "value inserted" or not zk.exists(instruction_path):
                     break
+
+    notify_client_fault_tolerance(master_name + "copy table done")
 
 
 def fault_tolerance(offline_region_name):
@@ -300,6 +328,7 @@ def watch_party_nodes(children):
 
     if find_region == 0 and Region_instance.region_socket_port is not None:
         print(f"Node loss master_name: {master_name}")
+        notify_client_fault_tolerance("fault happened for node:" + master_name)
         fault_tolerance(master_name)
         print("容错容灾end")
 

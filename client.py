@@ -18,6 +18,14 @@ def notify_done(server, data, stat, event):
         if zk.exists("/clients/" + server + "/done"):
             zk.delete("/clients/" + server + "/done")
 
+def notify_fault_tolerance(server,data,stat,event):
+    if event is not None and (event.type == "CREATED" or event.type == "CHANGED"):
+        # 打印是哪个server完成了任务
+        print(data.decode("utf-8"))
+        #completed_servers.append(server)
+        if zk.exists("/clients/" + server + "/fault_tolerance"):
+            zk.delete("/clients/" + server + "/fault_tolerance")
+
 # drop/insert/delete/update
 def get_update_servers():
     # 从instruction中提取表名

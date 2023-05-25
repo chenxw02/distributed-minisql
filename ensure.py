@@ -17,6 +17,9 @@ zk.ensure_path("/servers/minisql3/tables")
 zk.ensure_path("/clients/minisql1/done")
 zk.ensure_path("/clients/minisql2/done")
 zk.ensure_path("/clients/minisql3/done")
+zk.ensure_path("/clients/minisql1/fault_tolerance")
+zk.ensure_path("/clients/minisql2/fault_tolerance")
+zk.ensure_path("/clients/minisql3/fault_tolerance")
 zk.ensure_path("/tables")
 
 
