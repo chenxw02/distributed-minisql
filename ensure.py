@@ -34,7 +34,7 @@ zk.ensure_path("/servers/minisql2/tables/test_table")
 zk.set("/tables/test_table/server1", "minisql1".encode())
 zk.set("/tables/test_table/server2", "minisql2".encode())
 if zk.exists("/servers/minisql3/tables/test_table"):
-    zk.delete("/servers/minisql1/tables/test_table")
+    zk.delete("/servers/minisql3/tables/test_table")
 
 
 

@@ -74,10 +74,14 @@ def get_select_servers():
 
 for server in servers:
     zk.DataWatch("/clients/" + server + "/done", partial(notify_done, server))
+    zk.DataWatch("/clients/" + server + "/fault_tolerance", partial(notify_fault_tolerance, server))
 
 while True:
     # Get user input
     instruction = input("Please enter your instruction: ")
+
+    # Reset the completed servers list for this round
+    completed_servers = []
 
     # Pick two random servers
     #selected_servers = random.sample(servers, 2)

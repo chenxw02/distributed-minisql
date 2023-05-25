@@ -6,14 +6,14 @@ from kazoo.client import KazooClient
 import time
 
 # Assume the name is given when you run this script
-master_name = "minisql1"  # or minisql2, minisql3
+master_name = "minisql3"  # or minisql2, minisql3
 
 zk = KazooClient(hosts='127.0.0.1:2181,127.0.0.1:2182,127.0.0.1:2183')
 zk.start()
 
 # socket
 host = '127.0.0.1'
-port = 8888
+port = 8890
 portNum = 0
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 s.bind((host, port))
@@ -99,9 +99,6 @@ def handle_instruction(data, stat, event):
         print(table_name)
         print(target_region_name)
         copy_table(target_region_name, source_region_name, table_name)
-
-        message = "copy table done"
-        notify_client_fault_tolerance(message)
         return
 
     # When done, notify the client
@@ -193,7 +190,7 @@ def copy_instruction(source_server_name, target_server_name, table):
         zk.delete(instruction_path)
     zk.create(instruction_path, instruction_data.encode("utf-8"), ephemeral=True)
 
-    notify_client_fault_tolerance("node:" + master_name + "has send the instruction for copying table")
+    notify_client_fault_tolerance("fault happen in node " + master_name + ", it has send the instruction for copying table")
 
 
 # 这个函数当source_region_name为当前mastername的时候调用，把当前region的某一table通过zookeeper拷贝到target_region_name服务器中
@@ -233,16 +230,12 @@ def copy_table(target_region_name, source_region_name, table_name):
     zk.create(instruction_path, value=instruction.encode("utf-8"), ephemeral=True)
 
     # 等待指令执行完成
-    done_path = f"/clients/{target_region_name}/done"
     while True:
-        if zk.exists(done_path):
-            done_data, _ = zk.get(done_path)
-            if done_data == b"table created" or not zk.exists(instruction_path):
-                break
+        if not zk.exists(instruction_path):
+            break
 
     # 一条一条插入表的值到目标区域
     instruction_path = f"/servers/{target_region_name}/instructions"
-    done_path = f"/clients/{target_region_name}/done"
 
     for row in table_values:
         values_str = ','.join(row)
@@ -257,10 +250,8 @@ def copy_table(target_region_name, source_region_name, table_name):
 
         # 等待指令执行完成
         while True:
-            if zk.exists(done_path):
-                done_data, _ = zk.get(done_path)
-                if done_data.decode() == "value inserted" or not zk.exists(instruction_path):
-                    break
+            if not zk.exists(instruction_path):
+                break
 
     notify_client_fault_tolerance(master_name + "copy table done")
 
@@ -328,7 +319,6 @@ def watch_party_nodes(children):
 
     if find_region == 0 and Region_instance.region_socket_port is not None:
         print(f"Node loss master_name: {master_name}")
-        notify_client_fault_tolerance("fault happened for node:" + master_name)
         fault_tolerance(master_name)
         print("容错容灾end")
 
