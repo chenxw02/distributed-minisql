@@ -84,8 +84,8 @@ while True:
     completed_servers = []
 
     # Pick two random servers
-    #selected_servers = random.sample(servers, 2)
-    selected_servers = ['minisql1']
+    selected_servers = random.sample(servers, 2)
+    #selected_servers = ['minisql1']
 
     for server in selected_servers:
         print("Sending instruction to %s" % server)
