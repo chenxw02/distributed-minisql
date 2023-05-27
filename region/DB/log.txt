@@ -1,0 +1,2 @@
+create aaa schema ['value1'] with ['int'], primary_key=None
+create my_table schema ['value1', 'value2'] with ['int', 'char(20)'], primary_key=None
