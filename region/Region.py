@@ -51,7 +51,7 @@ class region:
             print(instruction)
             ret = interpret(instruction, buf=self.buf)
             if instruction.find("select") != -1:
-                self.c.send(self.reform(ret))
+                self.c.send(self.reform(ret).encode())
             print("done")
 
     def reform(self, input_tuple):

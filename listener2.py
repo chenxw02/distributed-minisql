@@ -1,6 +1,7 @@
 import threading
 import socket
 import random
+import re
 
 from kazoo.client import KazooClient
 import time
@@ -23,7 +24,6 @@ s.listen(3)
 class Region_instance():
     region_socket = None
     region_socket_port = None
-
 
     # 向minisql（region）发送指令
     @staticmethod
@@ -60,8 +60,21 @@ def handle_instruction(data, stat, event):
         # 创建表
         if not zk.exists("/servers/" + master_name + "/tables"):
             zk.create("/servers/" + master_name + "/tables")
+
         if not zk.exists("/servers/" + master_name + "/tables/" + table_name):
-            zk.create("/servers/" + master_name + "/tables/" + table_name)
+            zk.ensure_path("/servers/" + master_name + "/tables/" + table_name)
+            zk.ensure_path("/tables/" + table_name)
+            if not zk.exists("/tables/" + table_name + "/" + master_name):
+                zk.create("/tables/" + table_name + "/" + master_name, value=master_name.encode(("utf-8")))
+
+            # Extract the column definitions using regular expressions
+            match = re.match(r"create table \w+ \((.+)\);", data.decode("utf-8"))
+            if match:
+                column_definitions = match.group(1)
+            else:
+                print("Invalid SQL statement.")
+            zk.create("/servers/" + master_name + "/tables/" + table_name + "/info",
+                      value=column_definitions.encode("utf-8"))
             Region_instance.send_Instruction(data.decode("utf-8"))
             message = "table created"
         else:
@@ -80,17 +93,26 @@ def handle_instruction(data, stat, event):
         else:
             message = "table does not exist"
 
-    # 包含insert value
+    # 包含select
+    if data.decode("utf-8").find("select") != -1:
+        # 提取表名
+        table_name = data.decode("utf-8").split(" ")[3]
+        print(table_name)
+        # 执行
+        Region_instance.send_Instruction(data.decode("utf-8"))
+        ret = Region_instance.receive_Response()
+        message = '\n'.join([' '.join(item) for item in ret])
+
+    # 包含 insert value
     if data.decode("utf-8").find("insert into") != -1:
         # 提取表名
         table_name = data.decode("utf-8").split(" ")[2]
         print(table_name)
-        #执行
+        # 执行
         Region_instance.send_Instruction(data.decode("utf-8"))
         message = "insert value end"
 
-
-
+    # 容错容灾的copy table
     if data.decode("utf-8").find("copy table") != -1:
         # 提取表名
         table_name = data.decode("utf-8").split(" ")[2]
@@ -125,12 +147,7 @@ def handle_instruction(data, stat, event):
     print("Done")
 
 
-
-
-
-
-
-#用于通知client关于容错容灾的情况，包括掉线，拷贝等
+# 用于通知client关于容错容灾的情况，包括掉线，拷贝等
 def notify_client_fault_tolerance(message):
     zk.ensure_path("/clients/" + master_name)
 
@@ -145,7 +162,6 @@ def notify_client_fault_tolerance(message):
         # 发送message
         zk.create(done_path, message.encode("utf-8"), ephemeral=True)
     return
-
 
 
 # 找到掉线region对应的所有table的另一个copy所在的服务器名字，返回值以（tablename，servername）构成
@@ -164,19 +180,13 @@ def copy_master_name(offline_region_name):
         server_nodes = zk.get_children(table_path)
 
         for server_node in server_nodes:
-            server_path = table_path + "/" + server_node
-            server_data, _ = zk.get(server_path)
-
-            # 如果server节点的数据包含offline_region_name，则将另一个server节点加入列表
-            if offline_region_name in server_data.decode("utf-8"):
-                other_server_node = "server1" if server_node == "server2" else "server2"
-                other_server_path = table_path + "/" + other_server_node
-                other_server_data, _ = zk.get(other_server_path)
-                table_servers.append((table_name, other_server_data.decode("utf-8")))
+            if server_node != offline_region_name:
+                table_servers.append((table_name, server_node))
 
         # 将当前table_name节点下符合条件的另一个server节点加入servers列表
         servers.extend(table_servers)
 
+    print(servers)
     return servers
 
 
@@ -190,7 +200,8 @@ def copy_instruction(source_server_name, target_server_name, table):
         zk.delete(instruction_path)
     zk.create(instruction_path, instruction_data.encode("utf-8"), ephemeral=True)
 
-    notify_client_fault_tolerance("fault happen in node " + master_name + ", it has send the instruction for copying table")
+    notify_client_fault_tolerance(
+        "fault happen in node " + master_name + ", it has send the instruction for copying table")
 
 
 # 这个函数当source_region_name为当前mastername的时候调用，把当前region的某一table通过zookeeper拷贝到target_region_name服务器中
@@ -207,23 +218,34 @@ def copy_table(target_region_name, source_region_name, table_name):
     response = Region_instance.receive_Response()
 
     # 创建目标区域的表节点，并更新服务器节点内容
-    table_properties = response[0]  # 表属性值
-    table_values = response[1:]  # 表值
-    table_properties_str = ','.join(table_properties)  # 表属性值字符串
 
+    table_values = response[1:]  # 表值
+
+    info_path = "/servers/{}/tables/{}/info".format(source_region_name, table_name)
+    table_properties_data, _ = zk.get(info_path)
+    table_properties_str = table_properties_data.decode("utf-8")  # 表属性值字符串
+
+    print(table_properties_str)
 
     # 更新/table/xxx/server节点内容
-    server1_path = f"/tables/{table_name}/server1"
-    server2_path = f"/tables/{table_name}/server2"
+    children = zk.get_children(f"/tables/{table_name}")
+    # 确保子节点数量为2
+    if len(children) == 2:
+        # 构建子节点路径
+        server1_path = f"/tables/{table_name}" + "/" + children[0]
+        server2_path = f"/tables/{table_name}" + "/" + children[1]
     server1_value, _ = zk.get(server1_path)
     server2_value, _ = zk.get(server2_path)
     if server1_value.decode() != source_region_name:
-        zk.set(server1_path, target_region_name.encode("utf-8"))
+        zk.delete(server1_path, recursive=True)
+        zk.create(f"/tables/{table_name}" + "/" + target_region_name, value=target_region_name.encode("utf-8"))
+
     else:
-        zk.set(server2_path, target_region_name.encode("utf-8"))
+        zk.delete(server2_path, recursive=True)
+        zk.create(f"/tables/{table_name}" + "/" + target_region_name, value=target_region_name.encode("utf-8"))
 
     # 写入创建表的SQL指令到目标区域的指令节点
-    instruction = f"create table {table_name} ({table_properties_str})"
+    instruction = f"create table {table_name} ({table_properties_str});"
     instruction_path = f"/servers/{target_region_name}/instructions"
     if zk.exists(instruction_path):
         zk.delete(instruction_path)
@@ -239,7 +261,7 @@ def copy_table(target_region_name, source_region_name, table_name):
 
     for row in table_values:
         values_str = ','.join(row)
-        insert_instruction = f"insert into {table_name} values ({values_str})"
+        insert_instruction = f"insert into {table_name} values ({values_str});"
 
         # 创建instruction节点并写入指令
         if not zk.exists(instruction_path):

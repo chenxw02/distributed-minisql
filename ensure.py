@@ -11,6 +11,18 @@ import time
 zk = KazooClient(hosts='127.0.0.1:2181,127.0.0.1:2182,127.0.0.1:2183')
 zk.start()
 
+
+zk.delete("/servers/minisql1/tables", recursive=True)
+zk.delete("/servers/minisql2/tables", recursive=True)
+zk.delete("/servers/minisql3/tables", recursive=True)
+zk.delete("/clients/minisql1/done", recursive=True)
+zk.delete("/clients/minisql2/done", recursive=True)
+zk.delete("/clients/minisql3/done", recursive=True)
+zk.delete("/clients/minisql1/fault_tolerance", recursive=True)
+zk.delete("/clients/minisql2/fault_tolerance", recursive=True)
+zk.delete("/clients/minisql3/fault_tolerance", recursive=True)
+zk.delete("/tables", recursive=True)
+
 zk.ensure_path("/servers/minisql1/tables")
 zk.ensure_path("/servers/minisql2/tables")
 zk.ensure_path("/servers/minisql3/tables")
@@ -27,14 +39,14 @@ zk.ensure_path("/tables")
 
 #测试所要加的
 
-zk.ensure_path("/tables/test_table/server1")
-zk.ensure_path("/tables/test_table/server2")
-zk.ensure_path("/servers/minisql1/tables/test_table")
-zk.ensure_path("/servers/minisql2/tables/test_table")
-zk.set("/tables/test_table/server1", "minisql1".encode())
-zk.set("/tables/test_table/server2", "minisql2".encode())
-if zk.exists("/servers/minisql3/tables/test_table"):
-    zk.delete("/servers/minisql3/tables/test_table")
+#zk.ensure_path("/tables/test_table/minisql1")
+#zk.ensure_path("/tables/test_table/minisql2")
+#zk.ensure_path("/servers/minisql1/tables/test_table")
+#zk.ensure_path("/servers/minisql2/tables/test_table")
+#zk.set("/tables/test_table/minisql1", "minisql1".encode())
+#zk.set("/tables/test_table/minisql2", "minisql2".encode())
+#if zk.exists("/servers/minisql3/tables/test_table"):
+#    zk.delete("/servers/minisql3/tables/test_table")
 
 
 
