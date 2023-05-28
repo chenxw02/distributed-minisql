@@ -31,11 +31,12 @@ def get_update_servers():
     # 从instruction中提取表名
     table_name = instruction.split(" ")[2]
     # 获取所有包含该表的服务器
+    table_path = "/tables/" + table_name
     update_servers = []
-    for server in servers:
-        if zk.exists("/servers/" + server + "/tables/" + table_name):
-            update_servers.append(server)
-    if update_servers == []:
+    if zk.exists(table_path):
+        children = zk.get_children(table_path)
+        update_servers = [child for child in children]
+    if not update_servers:
         print("no such table")
         return None
     else:
@@ -69,10 +70,15 @@ def get_select_servers():
     # 从instruction中提取表名
     table_name = instruction.split(" ")[3]
     # 获取所有包含该表的服务器
+    table_path = "/tables/" + table_name
     select_servers = []
-    for server in servers:
-        if zk.exists("/servers/" + server + "/tables/" + table_name):
-            select_servers.append(server)
+    if zk.exists(table_path):
+        children = zk.get_children(table_path)
+        select_servers = [child for child in children]
+    if not select_servers:
+        print("no such table")
+        return None
+
     # 数量大于1时，随机返回其中一个server
     if len(select_servers) > 1:
         select_servers = random.sample(select_servers, 1)
