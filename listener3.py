@@ -87,7 +87,9 @@ def handle_instruction(data, stat, event):
         print(table_name)
         # 删除表
         if zk.exists("/servers/" + master_name + "/tables/" + table_name):
-            zk.delete("/servers/" + master_name + "/tables/" + table_name)
+            zk.delete("/servers/" + master_name + "/tables/" + table_name, recursive=True)
+        if zk.exists("/tables/" + table_name):
+            zk.delete("/tables/" + table_name, recursive=True)
             Region_instance.send_Instruction(data.decode("utf-8"))
             message = "table dropped"
         else:
