@@ -93,9 +93,9 @@ for server in servers:
     zk.DataWatch("/clients/" + server + "/fault_tolerance", partial(notify_fault_tolerance, server))
 
 def validate_instruction(instruction):
-    valid_starts = ["create table", "select", "drop table", "insert into", "delete from", "update"]
+    valid_starts = ["create table", "select", "drop table", "insert into", "delete from"]
     if not any(instruction.lower().startswith(vs) for vs in valid_starts):
-        print("Error: Instruction must start with one of the following: 'create table', 'drop table', 'select', 'insert into', 'delete from', 'update'")
+        print("Error: Instruction must start with one of the following: 'create table', 'drop table', 'select', 'insert into', 'delete from'")
         return False
     return True
 
@@ -105,7 +105,6 @@ instruction_handlers = {
     "drop table": get_update_servers,
     "insert into": get_update_servers,
     "delete from": get_update_servers,
-    "update": get_update_servers,
 }
 
 while True:
