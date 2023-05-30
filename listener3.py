@@ -114,6 +114,15 @@ def handle_instruction(data, stat, event):
         Region_instance.send_Instruction(data.decode("utf-8"))
         message = "insert value end"
 
+    # 包含delete
+    if data.decode("utf-8").find("delete") != -1:
+        # 提取表名
+        table_name = data.decode("utf-8").split(" ")[2]
+        print(table_name)
+        # 执行
+        Region_instance.send_Instruction(data.decode("utf-8"))
+        message = "delete value end"
+
     # 容错容灾的copy table
     if data.decode("utf-8").find("copy table") != -1:
         # 提取表名
