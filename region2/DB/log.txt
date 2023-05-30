@@ -1,0 +1,17 @@
+create aaa schema ['value1'] with ['int'], primary_key=None
+create my_table schema ['value1', 'value2'] with ['int', 'char(20)'], primary_key=None
+create test schema ['value1'] with ['int'], primary_key=None
+insert [1] into table test
+select from test
+drop table test
+create t schema ['value1'] with ['int'], primary_key=None
+create test schema ['v1'] with ['int'], primary_key=None
+table test all ready exits
+insert [1] into table test
+select from test
+table test all ready exits
+table test all ready exits
+insert [1] into table test
+select from test
+select from test
+select from test

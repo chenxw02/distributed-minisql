@@ -110,7 +110,7 @@ instruction_handlers = {
 
 while True:
     # Get user input
-    instruction = input("Please enter your instruction: ")
+    instruction = input("")
 
     for instruction_start in instruction_handlers:
         if instruction.lower().startswith(instruction_start):

@@ -215,7 +215,7 @@ def copy_instruction(source_server_name, target_server_name, table):
     zk.create(instruction_path, instruction_data.encode("utf-8"), ephemeral=True)
 
     notify_client_fault_tolerance(
-        "fault happen in node " + master_name + ", it has send the instruction for copying table")
+        "fault happen in node " + master_name + ", disaster recovery is in progress, please wait...")
 
 
 # 这个函数当source_region_name为当前mastername的时候调用，把当前region的某一table通过zookeeper拷贝到target_region_name服务器中
@@ -289,7 +289,7 @@ def copy_table(target_region_name, source_region_name, table_name):
             if not zk.exists(instruction_path):
                 break
 
-    notify_client_fault_tolerance(master_name + "copy table done")
+    notify_client_fault_tolerance(master_name + " copy table done")
 
 
 def fault_tolerance(offline_region_name):
